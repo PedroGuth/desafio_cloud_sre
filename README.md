@@ -4,7 +4,7 @@ Aqui está a arquitetura que deve ser desenvolvida no desafio para a primeira fa
 
 ![image 1](pictures/1.jpg)
 
-##Descrição do desafio
+## Descrição do desafio
 O candidato deve elaborar uma pequena aplicação lambda que faz uma request HTTP para o site **wittr.in** e retornar informações sobre o tempo.
 Os pré requisitos são:
 - Utilizar uma das seguintes linguagens: Python, NodeJS ou Java;
@@ -13,7 +13,7 @@ Os pré requisitos são:
 
 Não há diferença de testes para diferentes níveis de profissionais, porém ambos os testes serão avaliados com diferentes critérios, dependendo do perfil da vaga.
 
-##Estrutura organizacional do teste
+## Estrutura organizacional do teste
 ```bash
 ├── application -----------------------------------------> Onde o seu código deve estar armazenado;
 │
@@ -42,7 +42,6 @@ A implementação deve ficar na pasta correspondente ao desafio. Fique à vontad
 
 - Descreva como utilizar a sua solução;
 - Sempre considerar melhores práticas como se fosse um ambiente de produção;
-
 
 Boas implementações! 
 
