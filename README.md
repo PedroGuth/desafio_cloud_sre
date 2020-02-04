@@ -19,7 +19,9 @@ Não há diferença de testes para diferentes níveis de profissionais, porém a
 │
 ├── cloudformation --------------------------------------> Onde o seu código Cloudformation deve estar armazenado caso escolha utilizar essa ferramenta;
 │   ├── parameters
+│   │   └── parameters.json
 │   └── template
+│       └── cloudformation.yml
 │
 ├── README.md -------------------------------------------> Sua documentação com o passo a passo de como subir os componentes e a aplicação na AWS;
 │
