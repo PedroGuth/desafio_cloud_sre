@@ -1,47 +1,138 @@
 # Desafio Dock Banking as a service
 
-Aqui está a arquitetura que deve ser desenvolvida no desafio para a primeira fase de testes de candidatos da Dock para às vagas de **Site Reliability Engineer / DevOps cloud**, o teste pode ser elaborado numa conta pessoal free tier da AWS mas o teste deve possuir um manual de como deve ser criado.
+Para construção dessa aplicação foram usados dois serviços da AWS: AWS Lambda e AWS API Gateway. Esses dois serviços então foram automatizados com um terceiro, o AWS CloudFormation. Com eles foi possível fazer chamadas HTTP ao site http://wttr.in/ e retornar informações sobre o tempo.
 
-![image 1](pictures/1.jpg)
+Para realizar a tarefa foi usado a stack que encontra-se na pasta "cloudformation". Dentro desse YAML podemos definir os nomes das funções e APIs, assim como o metodo HTTP a ser usado:
 
-## Descrição do desafio
-O candidato deve elaborar uma pequena aplicação lambda que faz uma request HTTP para o site **wittr.in** e retornar informações sobre o tempo.
-Os pré requisitos são:
-- Utilizar uma das seguintes linguagens: Python, NodeJS ou Java;
-- Elaborar a IAC dos componentes da arquitetura proposta (API gateway e a função lambda), você pode utilizar Terraform ou Cloudformation;
-- Elaborar um README.md com um passo a passo de como provisionar os componentes e a aplicação na AWS;
+AWSTemplateFormatVersion: 2010-09-09
+Description: Funcao Lambda e Api Gateway para teste SRE Dock
 
-Não há diferença de testes para diferentes níveis de profissionais, porém ambos os testes serão avaliados com diferentes critérios, dependendo do perfil da vaga.
+Parameters:
+  apiGatewayName:
+    Type: String
+    Default: API-SRE-DOCK
+  apiGatewayStageName:
+    Type: String
+    AllowedPattern: "[a-z0-9]+"
+    Default: call
+  apiGatewayHTTPMethod:
+    Type: String
+    Default: GET
+  lambdaFunctionName:
+    Type: String
+    AllowedPattern: "[a-zA-Z0-9]+[a-zA-Z0-9-]+[a-zA-Z0-9]+"
+    Default: FUNCAO-SRE-DOCK
 
-## Estrutura organizacional do teste
-```bash
-├── application -----------------------------------------> Onde o seu código deve estar armazenado;
-│
-├── cloudformation --------------------------------------> Onde o seu código Cloudformation deve estar armazenado caso escolha utilizar essa ferramenta;
-│   ├── parameters
-│   │   └── parameters.json
-│   └── template
-│       └── cloudformation.yml
-│
-├── README.md -------------------------------------------> Sua documentação com o passo a passo de como subir os componentes e a aplicação na AWS;
-│
-└── terraform -------------------------------------------> Onde o seu código Terraform deve estar armazenado caso escolha utilizar essa ferramenta;
-    ├── main.tf
-    └── vars.tf
-```
+Resources:
+  apiGateway:
+    Type: AWS::ApiGateway::RestApi
+    Properties:
+      Description: Example API Gateway
+      EndpointConfiguration:
+        Types:
+          - REGIONAL
+      Name: !Ref apiGatewayName
 
-## Como entregar este desafio
-Você deve realizar o _**fork**_ este projeto e fazer o **_push_** no seu próprio repositório e enviar o link como resposta ao recrutador que lhe enviou o teste, junto com seu LinkedIn atualizado.
+  apiGatewayRootMethod:
+    Type: AWS::ApiGateway::Method
+    Properties:
+      AuthorizationType: NONE
+      HttpMethod: !Ref apiGatewayHTTPMethod
+      Integration:
+        IntegrationHttpMethod: POST
+        Type: AWS_PROXY
+        Uri: !Sub
+          - arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/${lambdaArn}/invocations
+          - lambdaArn: !GetAtt lambdaFunction.Arn
+      ResourceId: !GetAtt apiGateway.RootResourceId
+      RestApiId: !Ref apiGateway
 
-A implementação deve ficar na pasta correspondente ao desafio. Fique à vontade para adicionar qualquer tipo de conteúdo que julgue útil ao projeto, alterar/acrescentar um README com instruções de como executá-lo, etc.
+  apiGatewayDeployment:
+    Type: AWS::ApiGateway::Deployment
+    DependsOn:
+      - apiGatewayRootMethod
+    Properties:
+      RestApiId: !Ref apiGateway
+      StageName: !Ref apiGatewayStageName
 
-**Obs.**:
-- Você não deve fazer um Pull Request para este projeto!
+  lambdaFunction:
+    Type: AWS::Lambda::Function
+    Properties:
+      Code:
+        ZipFile: |
+            import requests
+            import json
+            def lambda_handler(event, context):
+            response = requests.get("http://wttr.in/sao_paulot?format=j1", timeout=10)
+            return {
+                'statusCode': 200,
+                'body': response.json()
+            }
+      Description: Example Lambda function
+      FunctionName: !Ref lambdaFunctionName
+      Handler: index.handler
+      MemorySize: 128
+      Role: !GetAtt lambdaIAMRole.Arn
+      Runtime: python3.8
 
-## Extras
+  lambdaApiGatewayInvoke:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !GetAtt lambdaFunction.Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Sub arn:aws:execute-api:${AWS::Region}:${AWS::AccountId}:${apiGateway}/${apiGatewayStageName}/${apiGatewayHTTPMethod}/
 
-- Descreva como utilizar a sua solução;
-- Sempre considerar melhores práticas como se fosse um ambiente de produção;
+  lambdaIAMRole:
+    Type: AWS::IAM::Role
+    Properties:
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Action:
+              - sts:AssumeRole
+            Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+      Policies:
+        - PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Action:
+                  - logs:CreateLogGroup
+                  - logs:CreateLogStream
+                  - logs:PutLogEvents
+                Effect: Allow
+                Resource:
+                  - !Sub arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:/aws/lambda/${lambdaFunctionName}:*
+          PolicyName: lambda
 
-Boas implementações! 
+  lambdaLogGroup:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName: !Sub /aws/lambda/${lambdaFunctionName}
+      RetentionInDays: 90
 
+Outputs:
+  apiGatewayInvokeURL:
+    Value: !Sub https://${apiGateway}.execute-api.${AWS::Region}.amazonaws.com/${apiGatewayStageName}
+
+  lambdaArn:
+    Value: !GetAtt lambdaFunction.Arn
+    
+Com isso, serão criados a API no API Gateway e a função Lambda. 
+
+A função importa o módulo request e json e os utiliza para requisitar as informações do site em um formato JSON:
+
+import requests
+import json
+def lambda_handler(event, context):
+response = requests.get("http://wttr.in/sao_paulot?format=j1", timeout=10)
+return {
+    'statusCode': 200,
+    'body': response.json()
+}
+
+Por último, com o API Gateway, temos um endpoint para acionar essa função lambda:
+https://7gjsghbf4c.execute-api.us-east-1.amazonaws.com/PROD
